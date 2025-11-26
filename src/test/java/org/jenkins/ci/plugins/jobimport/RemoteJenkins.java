@@ -1,5 +1,7 @@
 package org.jenkins.ci.plugins.jobimport;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
 import org.jenkins.ci.plugins.jobimport.utils.Constants;
 
@@ -11,9 +13,7 @@ import static java.io.File.separator;
 /**
  * Created by evildethow on 30/06/2016.
  */
-final class RemoteJenkins {
-
-  private static final String BASE_URL = "http://localhost";
+class RemoteJenkins {
 
   private static final String TOP_LVL_RSP_XML = "xml-api-response.xml";
   private static final String SECOND_LVL_RSP_XML = "folder" + separator + "xml-api-response.xml";
@@ -31,13 +31,13 @@ final class RemoteJenkins {
   private static final String EMPTY_FREESTYLE_JOB_BODY = "<freeStyleProject/>";
   private static final String EMPTY_MAVEN_JOB_BODY = "<mavenModuleSet/>";
 
-  private static final String FOLDER_CONFIG_QUERY = "/job/folder//config.xml";
-  private static final String JOB_CONFIG_QUERY = "/job/job//config.xml";
-  private static final String A_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder//config.xml";
-  private static final String A_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFreestyleJobInFolder//config.xml";
-  private static final String A_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aMavenJobInFolder//config.xml";
-  private static final String B_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder/job/bFreestyleJobInFolder//config.xml";
-  private static final String B_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder/job/bMavenJobInFolder//config.xml";
+  private static final String FOLDER_CONFIG_QUERY = "/job/folder/config.xml";
+  private static final String JOB_CONFIG_QUERY = "/job/job/config.xml";
+  private static final String A_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder/config.xml";
+  private static final String A_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFreestyleJobInFolder/config.xml";
+  private static final String A_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aMavenJobInFolder/config.xml";
+  private static final String B_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder/job/bFreestyleJobInFolder/config.xml";
+  private static final String B_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY = "/job/folder/job/aFolder/job/bMavenJobInFolder/config.xml";
 
   private static final String FOLDER_CONFIG = "folder" + separator + "config.xml";
   private static final String JOB_CONFIG = "job" + separator + "config.xml";
@@ -47,10 +47,10 @@ final class RemoteJenkins {
   private static final String B_FREESTYLE_JOB_IN_FOLDER_CONFIG = "folder" + separator + "jobs" + separator + "aFolder" + separator + "jobs" + separator + "bFreestyleJobInFolder" + separator + "config.xml";
   private static final String B_MAVEN_JOB_IN_FOLDER_CONFIG = "folder" + separator + "jobs" + separator + "aFolder" + separator + "jobs" + separator + "bMavenJobInFolder" + separator + "config.xml";
 
-  private final String url;
+  private final WireMockExtension wireMock;
 
-  RemoteJenkins(int port) {
-    this.url = BASE_URL + ":" + port;
+  RemoteJenkins(WireMockExtension wireMock) {
+    this.wireMock = wireMock;
 
     stubQueryResponses();
     stubImportResponses();
@@ -106,43 +106,34 @@ final class RemoteJenkins {
   }
 
   private void stubGetRequest(String url, String template) {
-    stubFor(get(urlEqualTo(url))
+    wireMock.stubFor(get(urlEqualTo(url.startsWith("/") ? url : "/" + url))
         .willReturn(aResponse()
             .withStatus(200)
             .withBody(template)));
   }
 
-  String getUrl() {
-    return url;
-  }
-
-  void verifyQueried() {
+  void verifyQueried(boolean recursive) {
     verifyGetRequest(TOP_LVL_QUERY);
+    if (recursive) {
+      verifyGetRequest(SECOND_LVL_FOLDER_QUERY);
+      verifyGetRequest(THIRD_LVL_A_FOLDER_QUERY);
+    }
   }
 
-  void verifyQueriedRecursive() {
-    verifyGetRequest(TOP_LVL_QUERY);
-    verifyGetRequest(SECOND_LVL_FOLDER_QUERY);
-    verifyGetRequest(THIRD_LVL_A_FOLDER_QUERY);
-  }
-
-  void verifyImported() {
+  void verifyImported(boolean recursive) {
     verifyGetRequest(FOLDER_CONFIG_QUERY);
     verifyGetRequest(JOB_CONFIG_QUERY);
+    if (recursive) {
+      verifyGetRequest(A_FOLDER_CONFIG_QUERY);
+      verifyGetRequest(A_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY);
+      verifyGetRequest(A_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY);
+      verifyGetRequest(B_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY);
+      verifyGetRequest(B_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY);
+    }
   }
 
-  void verifyImportedRecursive() {
-    verifyGetRequest(FOLDER_CONFIG_QUERY);
-    verifyGetRequest(JOB_CONFIG_QUERY);
-    verifyGetRequest(A_FOLDER_CONFIG_QUERY);
-    verifyGetRequest(A_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY);
-    verifyGetRequest(A_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY);
-    verifyGetRequest(B_FREESTYLE_JOB_IN_FOLDER_CONFIG_QUERY);
-    verifyGetRequest(B_MAVEN_JOB_IN_FOLDER_CONFIG_QUERY);
-  }
-  
   private void verifyGetRequest(String url) {
-    verify(getRequestedFor(urlEqualTo(url)));
+    wireMock.verify(getRequestedFor(urlEqualTo(url.startsWith("/") ? url : "/" + url)));
   }
 
   private static final String FIELD_START = "\\$\\{";
@@ -151,12 +142,12 @@ final class RemoteJenkins {
 
   private String getResponse(String template) {
     String rawXml = templateToString(template);
-    return rawXml.replaceAll(REGEX, url);
+    return rawXml.replaceAll(REGEX, wireMock.baseUrl());
   }
 
   private String templateToString(String template) {
     try {
-      return IOUtils.toString(Thread.currentThread().getContextClassLoader().getResourceAsStream(template));
+      return IOUtils.toString(Thread.currentThread().getContextClassLoader().getResourceAsStream(template), StandardCharsets.UTF_8);
     } catch (IOException e) {
       throw new RemoteJenkinsIOException(e.getMessage());
     }

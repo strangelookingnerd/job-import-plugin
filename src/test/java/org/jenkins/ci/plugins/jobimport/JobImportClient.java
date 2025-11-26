@@ -9,7 +9,7 @@ import org.jvnet.hudson.test.JenkinsRule;
 /**
  * Created by evildethow on 30/06/2016.
  */
-final class JobImportClient {
+class JobImportClient {
 
   private static final int IMPORT_SUBMIT_RETRY = 5;
   private static final long IMPORT_SUBMIT_RETRY_WAIT_TIME = 1000L;
@@ -20,10 +20,7 @@ final class JobImportClient {
     this.currentPage = webClient.goTo(Constants.URL_NAME);
   }
 
-  void doQuerySubmit(String remoteUrl, boolean recursiveSearch) throws Exception {
-    HtmlInput remoteUrlInput = (HtmlInput) currentPage.getElementsByName(Constants.REMOTE_URL_PARAM).get(0);
-    remoteUrlInput.setValueAttribute(remoteUrl);
-
+  void doQuerySubmit(boolean recursiveSearch) throws Exception {
     HtmlCheckBoxInput recursiveSearchInput = (HtmlCheckBoxInput) currentPage.getElementsByName(Constants.RECURSIVE_PARAM).get(0);
     recursiveSearchInput.setChecked(recursiveSearch);
 
